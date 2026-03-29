@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
+import '../models/models.dart';
 
 /// AI 识别服务
 /// 用于识别衣服类型、颜色、风格等

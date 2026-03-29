@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/wardrobe_provider.dart';
+import '../models/models.dart';
 import 'wardrobe_screen.dart';
 import 'outfit_screen.dart';
 import 'record_screen.dart';
 import 'profile_screen.dart';
-import '../widgets/quick_add_button.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -30,7 +30,13 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       body: _screens[_currentIndex],
       floatingActionButton: _currentIndex == 1 
-          ? const QuickAddButton() 
+          ? FloatingActionButton.extended(
+              onPressed: () {
+                // 添加衣服
+              },
+              icon: const Icon(Icons.add),
+              label: const Text('添加衣服'),
+            )
           : null,
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
