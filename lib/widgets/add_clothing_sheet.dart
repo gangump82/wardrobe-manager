@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -15,6 +18,8 @@ class _AddClothingSheetState extends State<AddClothingSheet> {
   final ImagePicker _picker = ImagePicker();
   
   String? _imagePath;
+  String? _base64Image;
+  Uint8List? _imageBytes;
   bool _isProcessing = false;
   
   // AI 识别结果
@@ -68,29 +73,39 @@ class _AddClothingSheetState extends State<AddClothingSheet> {
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: Colors.grey[300]!),
                   ),
-                  child: Center(
-                    child: _imagePath == null
-                        ? Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.add_a_photo,
-                                size: 48,
-                                color: Colors.grey[400],
+                  child: _imageBytes == null
+                      ? Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.add_a_photo,
+                              size: 48,
+                              color: Colors.grey[400],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '点击拍照或选择照片',
+                              style: TextStyle(color: Colors.grey[600]),
+                            ),
+                            if (kIsWeb)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: Text(
+                                  'Web 端将从相册选择',
+                                  style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                                ),
                               ),
-                              const SizedBox(height: 8),
-                              Text(
-                                '点击拍照或选择照片',
-                                style: TextStyle(color: Colors.grey[600]),
-                              ),
-                            ],
-                          )
-                        : const Icon(
-                            Icons.checkroom,
-                            size: 64,
-                            color: Colors.grey,
+                          ],
+                        )
+                      : ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.memory(
+                            _imageBytes!,
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: double.infinity,
                           ),
-                  ),
+                        ),
                 ),
               ),
               
@@ -107,7 +122,7 @@ class _AddClothingSheetState extends State<AddClothingSheet> {
                   ),
                 ),
               
-              if (_imagePath != null && !_isProcessing) ...[
+              if (_imageBytes != null && !_isProcessing) ...[
                 // 快速选择类型
                 const Text('类型', style: TextStyle(fontWeight: FontWeight.w500)),
                 const SizedBox(height: 8),
@@ -182,38 +197,57 @@ class _AddClothingSheetState extends State<AddClothingSheet> {
   }
 
   Future<void> _pickImage() async {
+    // Web 端使用 gallery，原生平台可选择 camera 或 gallery
+    final source = kIsWeb ? ImageSource.gallery : ImageSource.camera;
+    
     final XFile? image = await _picker.pickImage(
-      source: ImageSource.camera,
+      source: source,
       maxWidth: 1024,
       maxHeight: 1024,
       imageQuality: 85,
     );
     
     if (image != null) {
+      // 读取图片数据
+      final bytes = await image.readAsBytes();
+      final base64 = base64Encode(bytes);
+      
       setState(() {
         _imagePath = image.path;
+        _imageBytes = bytes;
+        _base64Image = base64;
         _isProcessing = true;
       });
       
       // AI 识别
-      final result = await context.read<WardrobeProvider>()
-          .recognizeAndAddClothing(image.path);
+      Clothing? result;
+      if (kIsWeb) {
+        // Web 端使用 base64
+        result = await context.read<WardrobeProvider>()
+            .recognizeAndAddClothingFromBase64(base64);
+      } else {
+        // 原生平台使用文件路径
+        result = await context.read<WardrobeProvider>()
+            .recognizeAndAddClothing(image.path);
+      }
       
-      if (result != null) {
+      if (result != null && mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('衣服已添加')),
         );
       }
       
-      setState(() {
-        _isProcessing = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
     }
   }
 
   void _saveClothing() {
-    if (_imagePath == null || _color.isEmpty) {
+    if (_imageBytes == null || _color.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('请填写完整信息')),
       );
@@ -222,7 +256,7 @@ class _AddClothingSheetState extends State<AddClothingSheet> {
     
     final clothing = Clothing(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
-      imageUrl: _imagePath!,
+      imageUrl: _base64Image != null ? 'data:image/jpeg;base64,$_base64Image' : _imagePath!,
       category: _category,
       subCategory: _subCategory,
       color: _color,

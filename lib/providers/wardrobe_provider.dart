@@ -164,6 +164,38 @@ class WardrobeProvider extends ChangeNotifier {
     }
   }
   
+  /// 从 base64 图像识别并添加衣服（Web 端使用）
+  Future<Clothing?> recognizeAndAddClothingFromBase64(String base64Image) async {
+    _isLoading = true;
+    notifyListeners();
+    
+    try {
+      final result = await _aiService.recognizeClothingFromBase64(base64Image);
+      
+      final clothing = Clothing(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        imageUrl: 'data:image/jpeg;base64,$base64Image',
+        category: result.category,
+        subCategory: result.subCategory,
+        color: result.color,
+        pattern: result.pattern,
+        styles: result.styles,
+        seasons: result.seasons,
+        brand: result.brand,
+        createdAt: DateTime.now(),
+      );
+      
+      await addClothing(clothing);
+      return clothing;
+    } catch (e) {
+      _error = e.toString();
+      return null;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+  
   // ========== 穿搭管理 ==========
   
   Future<void> addOutfit(Outfit outfit) async {
@@ -198,6 +230,7 @@ class WardrobeProvider extends ChangeNotifier {
         occasion: occasion,
         season: season,
         availableClothingIds: clothingIds,
+        availableClothes: _clothes,
       );
       return suggestion;
     } catch (e) {
